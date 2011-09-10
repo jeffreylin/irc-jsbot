@@ -1,4 +1,5 @@
 var config = require('./config');
+var child_process = require('child_process');
 var http = require('http');
 var IRC = require('irc-js');
 var querystring = require('querystring');
@@ -19,6 +20,7 @@ var RPC_PORT = 8000;
 var RPC_PATH = '/';
 
 var BUFFER_SIZE = 421;
+var MAX_SCRIPT_RUNTIME = 5000; //in ms
 
 var DEBUGGING = true;
 var dbg = function(output){
@@ -26,47 +28,51 @@ var dbg = function(output){
 }
 
 // Script
+var backend = new Backend();
+
 var irc = new IRC(options);
 irc.connect(function(){irc.join(CHANNEL);});
 
 irc.on('privmsg', function(msg){
-  try {
-    parseMsgMore(msg);
+  parseMsgMore(msg);
 
-    var code = getCode(msg.content);
-    dbg('Parsed code: '+code);
+  var code = getCode(msg.content);
+  dbg('Parsed code: '+code);
 
-    if (code) {
-      var rpc_options = {
-        host: RPC_HOST,
-        port: RPC_PORT,
-        path: RPC_PATH + '?' + querystring.stringify({
-          code: code
-        }),
-      };
-      dbg('Sending GET request with options: '+util.inspect(rpc_options));
+  if (code) {
+    var rpc_options = {
+      host: RPC_HOST,
+      port: RPC_PORT,
+      path: RPC_PATH + '?' + querystring.stringify({
+        code: code
+      }),
+    };
+    dbg('Sending GET request with options: '+util.inspect(rpc_options));
 
-      http.get(rpc_options, function(res){
-        var buf = '';
-        res.on('data', function(chunk){
-          dbg('Got chunk: '+chunk);
-          if (!(buf.length > BUFFER_SIZE)) {
-            buf += chunk;
-          }
-        });
-        res.on('end', function(){
-          dbg('GET request end');
-          irc.privmsg(
-            CHANNEL,
-            msg.sender + '> ' + sanitizeOutput(buf)
-          );
-        });
+    var timeout = setTimeout( backend.restartBackend, MAX_SCRIPT_RUNTIME );
+    http.get(rpc_options, function(res){
+      var buf = '';
+      res.on('data', function(chunk){
+        dbg('Got chunk: '+chunk);
+        if (!(buf.length > BUFFER_SIZE)) {
+          buf += chunk;
+        }
       });
-    }
-  }
-  catch (err) {
-    dbg(err);
-    irc.privmsg( CHANNEL, 'error. =[' );
+      res.on('end', function(){
+        clearTimeout( timeout );
+        dbg('GET request end');
+        irc.privmsg(
+          CHANNEL,
+          msg.sender + '> ' + sanitizeOutput(buf)
+        );
+      });
+    }).on('error', function(err){
+      dbg(err);
+      irc.privmsg(
+        CHANNEL,
+        msg.sender + '> ' + sanitizeOutput(String(err))
+      );
+    });
   }
 });
 
@@ -89,4 +95,20 @@ function sanitizeOutput(output){
   var saneOutput = output;
   saneOutput = saneOutput.replace( /\n/g, '\\n' );
   return limitString(saneOutput, BUFFER_SIZE);
+}
+
+function Backend(){
+  var backend = startBackend();
+  this.restartBackend = restartBackend;
+
+  function startBackend(){
+    backend = child_process.spawn('node', ['js_rpc.js'], {cwd: process.cwd()});
+    return backend;
+  }
+
+  function restartBackend(){
+    dbg('Restarted backend');
+    backend.kill();
+    backend = startBackend();
+  }
 }
