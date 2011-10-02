@@ -33,6 +33,18 @@ var backend = new Backend();
 var irc = new IRC(options);
 irc.connect(function(){irc.join(CHANNEL);});
 
+irc.on('error', function(err){
+	dbg('Got error: '+util.inspect(err));
+	dbg('Restarting IRC client');
+	try{
+		irc.disconnect();
+	}
+	catch (err) {
+		dbg('Disconnect error: '+err);
+	}
+	irc.connect(function(){irc.join(CHANNEL);});
+});
+
 irc.on('privmsg', function(msg){
   parseMsgMore(msg);
 
