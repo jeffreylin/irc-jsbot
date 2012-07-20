@@ -6,12 +6,17 @@ var querystring = require('querystring');
 var util = require('util');
 
 var SERVER = config.SERVER;
+var SERVER_PASSWORD = config.SERVER_PASSWORD;
 var NICK = config.NICK;
 var CHANNEL = config.CHANNEL;
+var CHANNEL_KEY = config.CHANNEL_KEY;
+var SSL = config.SSL;
 var TRIGGER_REGEX = /^js>(.*$)/;
 
 var options = {
   server: SERVER,
+  pass: SERVER_PASSWORD,
+  ssl: SSL,
   nick: NICK
 };
 
@@ -31,7 +36,7 @@ var dbg = function(output){
 var backend = new Backend();
 
 var irc = new IRC(options);
-irc.connect(function(){irc.join(CHANNEL);});
+irc.connect(function(){irc.join(CHANNEL, CHANNEL_KEY);});
 
 irc.on('error', function(err){
 	dbg('Got error: '+util.inspect(err));
