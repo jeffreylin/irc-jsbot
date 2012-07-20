@@ -1,4 +1,4 @@
-var config = require('./config');
+var config = require('config');
 var child_process = require('child_process');
 var http = require('http');
 var IRC = require('irc-js');
@@ -10,12 +10,14 @@ var SERVER_PASSWORD = config.SERVER_PASSWORD;
 var NICK = config.NICK;
 var CHANNEL = config.CHANNEL;
 var CHANNEL_KEY = config.CHANNEL_KEY;
+var PORT = config.PORT;
 var SSL = config.SSL;
 var TRIGGER_REGEX = /^js>(.*$)/;
 
 var options = {
   server: SERVER,
   pass: SERVER_PASSWORD,
+  port: PORT || 6667,
   ssl: SSL,
   nick: NICK
 };
@@ -47,7 +49,7 @@ irc.on('error', function(err){
 	catch (err) {
 		dbg('Disconnect error: '+err);
 	}
-	irc.connect(function(){irc.join(CHANNEL);});
+	irc.connect(function(){irc.join(CHANNEL, CHANNEL_KEY);});
 });
 
 irc.on('privmsg', function(msg){
